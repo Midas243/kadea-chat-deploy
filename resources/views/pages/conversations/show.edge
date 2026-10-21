@@ -1,0 +1,38 @@
+@layouts.chat({ title: current.title, conversations, activeId, q, results })
+  <div
+    class="chat__room"
+    x-data="chatRoom({ conversationId: {{ activeId }}, fragmentUrl: '{{ urlFor('messages.show', { id: '__ID__' }) }}' })"
+  >
+    <header class="chat__head">
+      <a href="{{ urlFor('conversations.index') }}" class="chat__back iconbtn" aria-label="Retour aux conversations">
+        @svg('lucide:arrow-left', { width: 18, height: 18 })
+      </a>
+      @!avatar({ initials: current.initials, src: current.avatarUrl, class: 'avatar' })
+      <div>
+        <div class="chat__title">{{ current.title }}</div>
+        <div class="chat__subtitle">{{ current.subtitle }}</div>
+      </div>
+      @if(current.isGroup)
+        <a href="{{ urlFor('groups.show', { id: activeId }) }}" class="iconbtn chat__info" title="Infos du groupe" aria-label="Infos du groupe">
+          @svg('lucide:info', { width: 18, height: 18 })
+        </a>
+      @end
+    </header>
+
+    <div class="chat__messages" x-ref="list" x-on:submit="onListSubmit($event)">
+      @each(message in messages)
+        @!messageBubble({ message, mine: message.senderId === auth.user.id })
+      @else
+        @!emptyState({
+          icon: 'lucide:hand',
+          title: 'Dites bonjour !',
+          text: "Il n'y a pas encore de message. Envoyez le premier.",
+        })
+      @end
+    </div>
+
+    <p class="chat__error" x-show="error" x-text="error" x-cloak></p>
+
+    @!messageForm({ conversationId: activeId })
+  </div>
+@end

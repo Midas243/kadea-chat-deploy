@@ -1,0 +1,96 @@
+@let(conversations = $props.get('conversations', []))
+@let(activeId = $props.get('activeId'))
+@let(q = $props.get('q', ''))
+@let(results = $props.get('results', []))
+<!DOCTYPE html>
+<html
+  lang="fr"
+  data-theme="{{ request.plainCookie('app_theme', { defaultValue: 'light', encoded: false }) }}"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ $props.get('title') ? $props.get('title') + ' - Kadea Chat' : 'Kadea Chat' }}</title>
+    {{ csrfMeta() }}
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @stack('dumper')
+  </head>
+  <body>
+    <div class="chat" data-view="{{ $props.get('view') || (activeId ? 'chat' : 'list') }}">
+      <aside
+        class="chat__side"
+        x-data="chatSidebar({
+          userId: {{ auth.user.id }},
+          activeId: {{ activeId ?? 'null' }},
+          cardUrl: '{{ urlFor('conversations.card', { id: '__ID__' }) }}',
+          readUrl: '{{ urlFor('conversations.read', { id: '__ID__' }) }}',
+          listUrl: '{{ urlFor('conversations.index') }}',
+        })"
+      >
+        <div class="chat__side-top">
+          @!logo({ size: 28 })
+          <div class="header__right">
+            <a href="{{ urlFor('groups.create') }}" class="iconbtn" title="Nouveau groupe" aria-label="Nouveau groupe">
+              @svg('lucide:users', { width: 16, height: 16 })
+            </a>
+            <a
+  href="{{ urlFor('profile.edit') }}"
+  class="iconbtn"
+  title="Mon profil"
+  aria-label="Mon profil"
+>
+  @svg('lucide:user-round', { width: 16, height: 16 })
+</a>
+            @!themeToggle()
+            @form({ route: 'session.destroy', method: 'POST' })
+              <button type="submit" class="iconbtn" title="Se déconnecter" aria-label="Se déconnecter">
+                @svg('lucide:log-out', { width: 16, height: 16 })
+              </button>
+            @end
+          </div>
+        </div>
+
+        <form method="GET" action="{{ urlFor('conversations.index') }}" class="chat__search">
+          @svg('lucide:search', { width: 15, height: 15 })
+          <input
+            type="search"
+            name="q"
+            value="{{ q }}"
+            placeholder="Chercher quelqu'un par nom ou e-mail"
+            autocomplete="off"
+          />
+        </form>
+
+        <div class="chat__list">
+          @if(q.length >= 2)
+            <p class="chat__label">Résultats pour « {{ q }} »</p>
+            @each(u in results)
+              @form({ route: 'conversations.store', class: 'chat__result' })
+                <input type="hidden" name="userId" value="{{ u.id }}" />
+                @!avatar({ initials: u.initials, src: u.profilePicture, class: 'avatar' })
+                <div class="conv-card__body">
+                  <div class="conv-card__name">{{ u.fullName || u.email }}</div>
+                  <div class="conv-card__preview">{{ u.email }}</div>
+                </div>
+                <button type="submit" class="btn btn--secondary btn--sm">Discuter</button>
+              @end
+            @else
+              <p class="chat__hint">Aucun utilisateur trouvé.</p>
+            @end
+            <a href="{{ urlFor('conversations.index') }}" class="chat__hint il">Effacer la recherche</a>
+          @else
+            <p class="chat__label" data-list-label>Conversations</p>
+            @each(item in conversations)
+              @!conversationCard({ item, active: item.id === activeId })
+            @else
+              <p class="chat__hint" data-list-empty>Aucune conversation pour le moment. Cherchez quelqu'un pour commencer.</p>
+            @end
+          @end
+        </div>
+      </aside>
+
+      <main class="chat__main">{{{ await $slots.main() }}}</main>
+    </div>
+    @include('partials/flash_alerts')
+  </body>
+</html>

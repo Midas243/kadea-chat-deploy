@@ -1,0 +1,23 @@
+@let(message = $props.get('message'))
+@let(mine = $props.get('mine'))
+<div class="msg {{ mine ? 'msg--out' : 'msg--in' }}" data-message-id="{{ message.id }}">
+  @if(!mine)
+    <span class="msg__author">{{ message.sender.fullName || message.sender.email }}</span>
+  @end
+
+  @if(message.deletedAt)
+    <div class="bubble bubble--deleted">Ce message a été supprimé</div>
+  @else
+    <div class="bubble">{{ message.content }}</div>
+  @end
+
+  <span class="msg__meta">
+    {{ message.createdAt.toFormat('HH:mm') }}
+    @if(mine && !message.deletedAt)
+      ·
+      @form({ route: 'messages.destroy', routeParams: { id: message.id }, class: 'msg__del' })
+        <button type="submit" class="msg__del-btn" title="Supprimer ce message">Supprimer</button>
+      @end
+    @end
+  </span>
+</div>

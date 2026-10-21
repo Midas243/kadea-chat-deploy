@@ -1,0 +1,44 @@
+<div class="picker">
+  <label class="field__label" for="picker-search">{{ $props.get('label', 'Membres') }}</label>
+
+  <div class="picker__chips" x-show="selected.length" x-cloak>
+    <template x-for="u in selected" x-bind:key="u.id">
+      <span class="chip">
+        <span x-text="u.name"></span>
+        <button type="button" class="chip__x" x-on:click="remove(u.id)" x-bind:aria-label="'Retirer ' + u.name">×</button>
+        <input type="hidden" name="memberIds[]" x-bind:value="u.id" />
+      </span>
+    </template>
+  </div>
+
+  <input
+    id="picker-search"
+    x-ref="search"
+    x-model="q"
+    x-on:input="onInput()"
+    type="search"
+    class="field__input"
+    placeholder="Chercher par nom ou e-mail"
+    autocomplete="off"
+  />
+
+  <ul class="picker__results" x-show="results.length" x-cloak>
+    <template x-for="u in results" x-bind:key="u.id">
+      <li>
+        <button type="button" class="picker__item" x-on:click="add(u)">
+          <span class="avatar avatar--sm" x-text="u.initials"></span>
+          <span class="conv-card__body">
+            <span class="conv-card__name" x-text="u.name"></span>
+            <span class="conv-card__preview" x-text="u.email"></span>
+          </span>
+        </button>
+      </li>
+    </template>
+  </ul>
+
+  <p class="chat__hint" x-show="searched && !loading && !results.length" x-cloak>Aucun utilisateur trouvé.</p>
+
+  @if('memberIds' in flashMessages.get('inputErrorsBag', {}))
+    <span class="field__error">Choisissez au moins une personne.</span>
+  @end
+</div>

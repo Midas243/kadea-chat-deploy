@@ -1,0 +1,50 @@
+@layouts.auth()
+  <div style="text-align: center;">
+    <div class="empty__mark" style="margin: 0 auto 16px;">
+      @svg('lucide:mail-check', { width: 26, height: 26 })
+    </div>
+    <h1 class="auth__title">Vérifiez votre boîte mail</h1>
+    <p class="auth__sub">
+      @if(flashMessages.has('email'))
+        Pour activer votre compte, cliquez sur le lien de confirmation envoyé à
+        <strong>{{ flashMessages.get('email') }}</strong>.
+      @else
+        Pour activer votre compte, cliquez sur le lien de confirmation que nous vous avons envoyé.
+      @end
+      Pensez à regarder vos spams.
+    </p>
+  </div>
+
+  @form({
+    route: 'verification.resend',
+    method: 'POST',
+    class: 'auth__form',
+    'x-data': '{ submitting: false }',
+    'x-on:submit': 'submitting = true',
+  })
+    @field.root({ name: 'email' })
+      @!field.label({ text: "Pas reçu ? Renvoyer l'e-mail à" })
+      @!input.control({
+        type: 'email',
+        autocomplete: 'email',
+        value: flashMessages.get('email', ''),
+        placeholder: 'vous@exemple.com',
+      })
+      @!field.error()
+    @end
+    @!button({
+      text: "Renvoyer l'e-mail",
+      variant: 'secondary',
+      type: 'submit',
+      block: true,
+      'x-bind:disabled': 'submitting',
+      'x-text': "submitting ? 'Envoi…' : \"Renvoyer l'e-mail\"",
+    })
+  @end
+
+  <p class="auth__foot">
+    @link({ route: 'session.create', class: 'il' })
+      Retour à la connexion
+    @end
+  </p>
+@end

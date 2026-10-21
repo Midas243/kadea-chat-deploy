@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html
+  lang="fr"
+  data-theme="{{ request.plainCookie('app_theme', { defaultValue: 'light', encoded: false }) }}"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kadea Chat</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @stack('dumper')
+  </head>
+  <body>
+    <div class="auth-center">
+      <div class="auth-center__box">
+        @!logo({ size: 40 })
+        <div class="auth-center__card">{{{ await $slots.main() }}}</div>
+        @!themeToggle()
+      </div>
+    </div>
+    @include('partials/flash_alerts')
+  </body>
+</html>

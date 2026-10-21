@@ -1,0 +1,22 @@
+@let(item = $props.get('item'))
+@let(active = $props.get('active'))
+<a
+  href="{{ urlFor('conversations.show', { id: item.id }) }}"
+  class="conv-card {{ active ? 'conv-card--active' : '' }} {{ item.unreadCount > 0 && !active ? 'conv-card--unread' : '' }}"
+  aria-current="{{ active ? 'page' : 'false' }}"
+  data-conversation-id="{{ item.id }}"
+>
+  @!avatar({ initials: item.initials, src: item.avatarUrl, class: 'avatar' })
+  <div class="conv-card__body">
+    <div class="conv-card__top">
+      <span class="conv-card__name">{{ item.title }}</span>
+      <span class="conv-card__time">{{ item.timeLabel }}</span>
+    </div>
+    <div class="conv-card__bottom">
+      <div class="conv-card__preview">{{ item.preview }}</div>
+      @if(item.unreadCount > 0 && !active)
+        <span class="badge-unread" aria-label="{{ item.unreadCount }} message(s) non lu(s)">{{ item.unreadCount > 99 ? '99+' : item.unreadCount }}</span>
+      @end
+    </div>
+  </div>
+</a>

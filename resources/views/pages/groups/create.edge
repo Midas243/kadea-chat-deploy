@@ -1,0 +1,29 @@
+@layouts.chat({ title: 'Nouveau groupe', conversations, activeId, q: '', results: [], view: 'chat' })
+  <header class="chat__head">
+    <a href="{{ urlFor('conversations.index') }}" class="chat__back iconbtn" aria-label="Retour aux conversations">
+      @svg('lucide:arrow-left', { width: 18, height: 18 })
+    </a>
+    <div>
+      <div class="chat__title">Nouveau groupe</div>
+      <div class="chat__subtitle">Vous en serez l'administrateur</div>
+    </div>
+  </header>
+
+  <div class="panel">
+    @form({
+      route: 'groups.store',
+      class: 'panel__form',
+      'x-data': "userPicker({ searchUrl: '" + urlFor('users.search') + "' })",
+    })
+      @field.root({ name: 'name' })
+        @!field.label({ text: 'Nom du groupe' })
+        @!input.control({ placeholder: 'Ex. Promo 2026 – Développement web', maxlength: '60' })
+        @!field.error()
+      @end
+
+      @!userPicker({ label: 'Ajouter des membres' })
+
+      @!button({ text: 'Créer le groupe', type: 'submit' })
+    @end
+  </div>
+@end

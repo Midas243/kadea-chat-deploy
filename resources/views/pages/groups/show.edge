@@ -1,0 +1,59 @@
+@layouts.chat({ title: group.title, conversations, activeId, q: '', results: [], view: 'chat' })
+  <header class="chat__head">
+    <a href="{{ urlFor('conversations.show', { id: activeId }) }}" class="chat__back iconbtn" aria-label="Retour à la discussion">
+      @svg('lucide:arrow-left', { width: 18, height: 18 })
+    </a>
+    @!avatar({ initials: group.initials, src: null, class: 'avatar' })
+    <div>
+      <div class="chat__title">{{ group.title }}</div>
+      <div class="chat__subtitle">{{ members.length }} membres</div>
+    </div>
+    <a href="{{ urlFor('conversations.show', { id: activeId }) }}" class="btn btn--secondary btn--sm chat__info">
+      Retour à la discussion
+    </a>
+  </header>
+
+  <div class="panel">
+    <h2 class="panel__title">Membres ({{ members.length }})</h2>
+    <ul class="members">
+      @each(member in members)
+        <li class="members__row">
+          @!avatar({ initials: member.user.initials, src: member.user.profilePicture, class: 'avatar' })
+          <div class="conv-card__body">
+            <div class="conv-card__name">
+              {{ member.user.fullName || member.user.email }}{{ member.userId === auth.user.id ? ' (vous)' : '' }}
+            </div>
+            <div class="conv-card__preview">{{ member.user.email }}</div>
+          </div>
+          @if(member.role === 'admin')
+            <span class="badge-role">Admin</span>
+          @end
+          @if(canManage && member.userId !== auth.user.id)
+            @form({
+              route: 'groups.members.remove',
+              routeParams: { id: group.id, userId: member.userId },
+              onsubmit: "return confirm('Retirer ce membre du groupe ?')",
+            })
+              <button type="submit" class="btn btn--secondary btn--sm">Retirer</button>
+            @end
+          @end
+        </li>
+      @end
+    </ul>
+
+    @if(canManage)
+      <h2 class="panel__title">Ajouter des membres</h2>
+      @form({
+        route: 'groups.members.add',
+        routeParams: { id: group.id },
+        class: 'panel__form',
+        'x-data': "userPicker({ searchUrl: '" + urlFor('users.search') + "', conversationId: " + group.id + " })",
+      })
+        @!userPicker({ label: 'Chercher des personnes' })
+        @!button({ text: 'Ajouter au groupe', type: 'submit' })
+      @end
+    @else
+      <p class="chat__hint">Seuls les administrateurs peuvent ajouter ou retirer des membres.</p>
+    @end
+  </div>
+@end
