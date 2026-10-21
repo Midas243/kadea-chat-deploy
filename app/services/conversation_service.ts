@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
+import type transmitService from '@adonisjs/transmit/services/main'
 import Conversation from '#models/conversation'
 import Message from '#models/message'
 import User from '#models/user'
@@ -142,7 +143,7 @@ export async function markConversationRead(me: User, conversationId: number) {
 
 /** Prévient chaque membre (canal personnel) qu'une conversation a changé. */
 export async function notifyMembers(
-  transmit: { broadcast: (channel: string, payload: unknown) => unknown },
+  transmit: typeof transmitService,
   conversationId: number
 ) {
   const rows = await db.from('members').where('conversation_id', conversationId).select('user_id')
