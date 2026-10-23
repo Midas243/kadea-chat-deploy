@@ -15,8 +15,12 @@
     x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $el.form.requestSubmit() }"
   ></textarea>
   <button type="submit" class="btn btn--primary composer__send" x-bind:disabled="sending" aria-label="Envoyer">
-    <span x-show="!sending && !sent">@svg('lucide:send', { width: 16, height: 16 })</span>
-    <span x-show="sent" x-cloak>@svg('lucide:check', { width: 16, height: 16 })</span>
+    <span x-show="!sending && !sent">
+      @svg('lucide:send', { width: 16, height: 16 })
+    </span>
+    <span x-show="sent" x-cloak>
+      @svg('lucide:check', { width: 16, height: 16 })
+    </span>
     <span x-show="sending" x-cloak>…</span>
   </button>
 @end

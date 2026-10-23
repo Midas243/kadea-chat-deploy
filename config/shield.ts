@@ -51,7 +51,7 @@ const shieldConfig = defineConfig({
      * Enable XSRF-TOKEN cookie for JavaScript frameworks.
      * When enabled, the CSRF token is available to client-side code.
      */
-    enableXsrfCookie: false,
+    enableXsrfCookie: true,
 
     /**
      * HTTP methods that require CSRF token validation.

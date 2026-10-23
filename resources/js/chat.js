@@ -1,6 +1,22 @@
 import { Transmit } from '@adonisjs/transmit-client'
 
 let transmit = null
+let lastSubscribeStatus = null // code HTTP du dernier refus, pour le diagnostic
+
+/**
+ * Identifiant unique du client temps réel.
+ * `crypto.randomUUID()` n'existe que dans un contexte sécurisé (HTTPS ou localhost) :
+ * ouverte autrement (IP du réseau local, HTTP…), la page plantait avec
+ * « Connexion en direct indisponible ». `getRandomValues` marche partout.
+ */
+function generateUid() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40 // version 4
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
 
 /** Une seule connexion temps réel par page, créée au premier besoin. */
 function getTransmit() {
@@ -9,11 +25,30 @@ function getTransmit() {
     const addToken = (request) => request.headers.set('X-CSRF-TOKEN', token)
     transmit = new Transmit({
       baseUrl: window.location.origin,
+      uidGenerator: generateUid,
+      onSubscribeFailed: (response) => {
+        lastSubscribeStatus = response.status
+        console.error(`[chat] /__transmit/subscribe a répondu ${response.status}`)
+      },
       beforeSubscribe: addToken,
       beforeUnsubscribe: addToken,
     })
   }
   return transmit
+}
+
+/** Attend la fin de l'abonnement ; false si le serveur l'a refusé ou n'a pas répondu à temps. */
+async function subscribeOrTimeout(subscription, ms = 10000) {
+  let timer
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), ms)
+  })
+  const created = subscription.create().then(() => subscription.isCreated)
+  try {
+    return await Promise.race([created, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export function registerChat(Alpine) {
@@ -34,8 +69,9 @@ export function registerChat(Alpine) {
       try {
         this.subscription = getTransmit().subscription(`users/${this.userId}`)
         this.subscription.onMessage((event) => this.onEvent(event))
-        await this.subscription.create()
+        await subscribeOrTimeout(this.subscription)
       } catch (e) {
+        console.error('[chat] abonnement au canal personnel impossible', e)
         // la liste se mettra à jour au prochain rechargement
       }
     },
@@ -113,9 +149,15 @@ export function registerChat(Alpine) {
       try {
         this.subscription = getTransmit().subscription(`conversations/${this.conversationId}`)
         this.subscription.onMessage((event) => this.onEvent(event))
-        await this.subscription.create()
+        const ok = await subscribeOrTimeout(this.subscription)
         this.watchConnection()
+        if (!ok) {
+          const why = lastSubscribeStatus ? `code ${lastSubscribeStatus}` : 'le flux /__transmit/events ne s’ouvre pas'
+          console.error(`[chat] abonnement impossible (${why})`)
+          this.error = `Connexion en direct indisponible (${why}) : rechargez la page.`
+        }
       } catch (e) {
+        console.error('[chat] connexion temps réel impossible', e)
         this.error = 'Connexion en direct indisponible : rechargez la page.'
       }
     },
