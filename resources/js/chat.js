@@ -1,54 +1,13 @@
-import { Transmit } from '@adonisjs/transmit-client'
+import { listen, onStatus, ajaxHeaders } from './realtime.js'
 
-let transmit = null
-let lastSubscribeStatus = null // code HTTP du dernier refus, pour le diagnostic
+const HTML_HEADERS = { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
+const JSON_HEADERS = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
 
-/**
- * Identifiant unique du client temps réel.
- * `crypto.randomUUID()` n'existe que dans un contexte sécurisé (HTTPS ou localhost) :
- * ouverte autrement (IP du réseau local, HTTP…), la page plantait avec
- * « Connexion en direct indisponible ». `getRandomValues` marche partout.
- */
-function generateUid() {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  const b = crypto.getRandomValues(new Uint8Array(16))
-  b[6] = (b[6] & 0x0f) | 0x40 // version 4
-  b[8] = (b[8] & 0x3f) | 0x80
-  const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
-}
-
-/** Une seule connexion temps réel par page, créée au premier besoin. */
-function getTransmit() {
-  if (!transmit) {
-    const token = document.querySelector('meta[name="csrf-token"]')?.content ?? ''
-    const addToken = (request) => request.headers.set('X-CSRF-TOKEN', token)
-    transmit = new Transmit({
-      baseUrl: window.location.origin,
-      uidGenerator: generateUid,
-      onSubscribeFailed: (response) => {
-        lastSubscribeStatus = response.status
-        console.error(`[chat] /__transmit/subscribe a répondu ${response.status}`)
-      },
-      beforeSubscribe: addToken,
-      beforeUnsubscribe: addToken,
-    })
-  }
-  return transmit
-}
-
-/** Attend la fin de l'abonnement ; false si le serveur l'a refusé ou n'a pas répondu à temps. */
-async function subscribeOrTimeout(subscription, ms = 10000) {
-  let timer
-  const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => resolve(false), ms)
-  })
-  const created = subscription.create().then(() => subscription.isCreated)
-  try {
-    return await Promise.race([created, timeout])
-  } finally {
-    clearTimeout(timer)
-  }
+/** Transforme un morceau de HTML en élément DOM. */
+function toElement(html) {
+  const template = document.createElement('template')
+  template.innerHTML = html.trim()
+  return template.content.firstElementChild
 }
 
 export function registerChat(Alpine) {
@@ -63,26 +22,29 @@ export function registerChat(Alpine) {
     cardUrl: config.cardUrl, // ex. "/conversations/__ID__/card"
     readUrl: config.readUrl, // ex. "/conversations/__ID__/read"
     listUrl: config.listUrl || '/conversations',
-    subscription: null,
+    channel: null,
+    stopStatus: null,
 
-    async init() {
-      try {
-        this.subscription = getTransmit().subscription(`users/${this.userId}`)
-        this.subscription.onMessage((event) => this.onEvent(event))
-        await subscribeOrTimeout(this.subscription)
-      } catch (e) {
-        console.error('[chat] abonnement au canal personnel impossible', e)
-        // la liste se mettra à jour au prochain rechargement
-      }
+    init() {
+      this.channel = listen(`users/${this.userId}`, (event) => this.onEvent(event))
+
+      // après une coupure, la liste est rafraîchie sans recharger la page
+      this.stopStatus = onStatus((status, previous) => {
+        if (status === 'connected' && previous === 'reconnecting') this.refreshList()
+      })
     },
 
     destroy() {
-      this.subscription?.delete().catch(() => {})
+      this.channel?.stop()
+      this.stopStatus?.()
     },
 
-    csrfHeaders() {
-      const token = document.querySelector('meta[name="csrf-token"]')?.content ?? ''
-      return { 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' }
+    cardSelector(id) {
+      return `.conv-card[data-conversation-id="${id}"]`
+    },
+
+    leave() {
+      window.location.href = this.listUrl
     },
 
     async onEvent(event) {
@@ -91,8 +53,8 @@ export function registerChat(Alpine) {
 
       // retiré d'un groupe : la carte disparaît et, si elle était ouverte, on quitte la page
       if (event.type === 'conversation.removed') {
-        this.$root.querySelector(`.conv-card[data-conversation-id="${id}"]`)?.remove()
-        if (isActive) window.location.href = this.listUrl
+        this.$root.querySelector(this.cardSelector(id))?.remove()
+        if (isActive) this.leave()
         return
       }
       if (event.type !== 'conversation.updated') return
@@ -102,19 +64,19 @@ export function registerChat(Alpine) {
         if (isActive) {
           await fetch(this.readUrl.replace('__ID__', id), {
             method: 'POST',
-            headers: this.csrfHeaders(),
+            headers: ajaxHeaders(),
             credentials: 'same-origin',
           })
         }
 
-        const response = await fetch(`${this.cardUrl.replace('__ID__', id)}?active=${isActive ? 1 : 0}`, {
-          headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
-          credentials: 'same-origin',
-        })
+        const response = await fetch(
+          `${this.cardUrl.replace('__ID__', id)}?active=${isActive ? 1 : 0}`,
+          { headers: HTML_HEADERS, credentials: 'same-origin' }
+        )
         if (response.status === 403 || response.status === 404) {
           // plus d'accès à cette conversation
-          this.$root.querySelector(`.conv-card[data-conversation-id="${id}"]`)?.remove()
-          if (isActive) window.location.href = this.listUrl
+          this.$root.querySelector(this.cardSelector(id))?.remove()
+          if (isActive) this.leave()
           return
         }
         if (!response.ok) return
@@ -129,60 +91,79 @@ export function registerChat(Alpine) {
       const label = this.$root.querySelector('[data-list-label]')
       if (!label) return // liste masquée (résultats de recherche affichés)
 
-      this.$root.querySelector(`.conv-card[data-conversation-id="${id}"]`)?.remove()
+      this.$root.querySelector(this.cardSelector(id))?.remove()
       this.$root.querySelector('[data-list-empty]')?.remove()
       label.insertAdjacentHTML('afterend', html)
     },
+
+    /** Après une reconnexion : on relit la page courante et on remplace la liste. */
+    async refreshList() {
+      try {
+        const label = this.$root.querySelector('[data-list-label]')
+        if (!label) return // recherche en cours : on ne touche pas
+        const response = await fetch(window.location.href, {
+          headers: HTML_HEADERS,
+          credentials: 'same-origin',
+        })
+        if (!response.ok) return
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html')
+        const fresh = doc.querySelector('.chat__list')
+        const current = this.$root.querySelector('.chat__list')
+        if (fresh && current) current.innerHTML = fresh.innerHTML
+      } catch (e) {
+        // la prochaine mise à jour en direct corrigera la liste
+      }
+    },
   }))
 
+  /**
+   * Une conversation ouverte : reçoit « message.created » et « message.deleted »,
+   * envoie les messages en fetch, rattrape les messages manqués après une coupure.
+   */
   Alpine.data('chatRoom', (config) => ({
     conversationId: config.conversationId,
     fragmentUrl: config.fragmentUrl, // ex. "/messages/__ID__"
     sending: false,
     sent: false,
-    error: '',
-    subscription: null,
-    wasDisconnected: false,
+    live: 'connecting', // état de la connexion en direct
+    channel: null,
+    stopStatus: null,
+    _error: '',
 
-    async init() {
-      this.scrollToBottom()
-      try {
-        this.subscription = getTransmit().subscription(`conversations/${this.conversationId}`)
-        this.subscription.onMessage((event) => this.onEvent(event))
-        const ok = await subscribeOrTimeout(this.subscription)
-        this.watchConnection()
-        if (!ok) {
-          const why = lastSubscribeStatus ? `code ${lastSubscribeStatus}` : 'le flux /__transmit/events ne s’ouvre pas'
-          console.error(`[chat] abonnement impossible (${why})`)
-          this.error = `Connexion en direct indisponible (${why}) : rechargez la page.`
-        }
-      } catch (e) {
-        console.error('[chat] connexion temps réel impossible', e)
-        this.error = 'Connexion en direct indisponible : rechargez la page.'
-      }
+    /**
+     * `error` est lu par le gabarit (<p x-text="error">). C'est un getter :
+     * une erreur d'envoi est prioritaire, sinon on affiche l'état de la connexion.
+     */
+    get error() {
+      if (this._error) return this._error
+      if (this.live === 'reconnecting') return 'Connexion en direct perdue. Reconnexion…'
+      if (this.live === 'failed') return 'Connexion en direct perdue. Rechargez la page.'
+      return ''
+    },
+    set error(value) {
+      this._error = value
     },
 
-    /** Après une coupure de connexion, les messages manqués sont récupérés en rechargeant. */
-    watchConnection() {
-      try {
-        const t = getTransmit()
-        t.on('disconnected', () => {
-          this.wasDisconnected = true
-        })
-        t.on('connected', () => {
-          if (!this.wasDisconnected) return
-          this.wasDisconnected = false
-          const draft = this.$root.querySelector('textarea[name="content"]')?.value.trim()
-          if (draft) this.error = 'Connexion rétablie : envoyez votre message puis rechargez la page.'
-          else window.location.reload()
-        })
-      } catch (e) {
-        // sans cet écouteur, seul le rattrapage automatique est perdu
-      }
+    init() {
+      this.scrollToBottom()
+
+      this.channel = listen(
+        `conversations/${this.conversationId}`,
+        (event) => this.onEvent(event),
+        // accès refusé (retiré du groupe, conversation inconnue) : retour à la liste
+        { onDenied: () => (window.location.href = '/conversations') }
+      )
+
+      this.stopStatus = onStatus((status, previous) => {
+        this.live = status
+        // les messages arrivés pendant la coupure sont récupérés sans recharger
+        if (status === 'connected' && previous === 'reconnecting') this.catchUp()
+      })
     },
 
     destroy() {
-      this.subscription?.delete().catch(() => {})
+      this.channel?.stop()
+      this.stopStatus?.()
     },
 
     get list() {
@@ -206,32 +187,85 @@ export function registerChat(Alpine) {
 
     async fetchBubble(id) {
       const response = await fetch(this.fragmentUrl.replace('__ID__', id), {
-        headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+        headers: HTML_HEADERS,
         credentials: 'same-origin',
       })
       if (!response.ok) throw new Error('fragment')
       return response.text()
     },
 
-    /** Reçoit un événement du canal : « message.created » ou « message.deleted ». */
+    /**
+     * Place une bulle à sa position : avant la première bulle d'id plus grand,
+     * sinon à la fin. Deux événements qui arrivent dans le désordre restent donc triés.
+     */
+    insertBubble(id, element) {
+      this.list.querySelector('.empty')?.remove()
+      const next = [...this.list.querySelectorAll('[data-message-id]')].find(
+        (el) => Number(el.dataset.messageId) > id
+      )
+      if (next) next.before(element)
+      else this.list.append(element)
+    },
+
+    /** Affiche un message (sans doublon). Renvoie la bulle ajoutée, ou null si déjà présente. */
+    async addMessage(id) {
+      if (this.findBubble(id)) return null
+      const wasNearBottom = this.isNearBottom()
+      const element = toElement(await this.fetchBubble(id))
+      if (!element || this.findBubble(id)) return null // arrivé entre-temps
+
+      this.insertBubble(id, element)
+      if (wasNearBottom || element.classList.contains('msg--out')) this.scrollToBottom()
+      return element
+    },
+
+    /** Remplace une bulle par sa version à jour (message supprimé). */
+    async refreshMessage(id) {
+      const current = this.findBubble(id)
+      if (!current) return
+      const element = toElement(await this.fetchBubble(id))
+      if (element) current.replaceWith(element)
+    },
+
+    /** Événements du canal : « message.created » ou « message.deleted ». */
     async onEvent(event) {
       try {
-        if (event.type === 'message.created') {
-          if (this.findBubble(event.messageId)) return // déjà affiché
-          const wasNearBottom = this.isNearBottom()
-          const html = await this.fetchBubble(event.messageId)
-          if (this.findBubble(event.messageId)) return
-          this.list.querySelector('.empty')?.remove()
-          this.list.insertAdjacentHTML('beforeend', html)
-          const added = this.list.lastElementChild
-          if (wasNearBottom || added?.classList.contains('msg--out')) this.scrollToBottom()
-        } else if (event.type === 'message.deleted') {
-          const current = this.findBubble(event.messageId)
-          if (!current) return
-          current.outerHTML = await this.fetchBubble(event.messageId)
-        }
+        if (event.type === 'message.created') await this.addMessage(event.messageId)
+        else if (event.type === 'message.deleted') await this.refreshMessage(event.messageId)
       } catch (e) {
-        // en cas d'échec ponctuel, un rechargement de la page remet tout à jour
+        // échec ponctuel : le prochain rattrapage ou un rechargement remet tout à jour
+      }
+    },
+
+    /**
+     * Après une coupure : on relit la page de la conversation (la même que celle du
+     * rechargement) et on ajoute ce qui manque ou a été supprimé, sans perdre le brouillon.
+     */
+    async catchUp() {
+      try {
+        const response = await fetch(window.location.pathname, {
+          headers: HTML_HEADERS,
+          credentials: 'same-origin',
+        })
+        if (response.status === 403 || response.status === 404) {
+          window.location.href = '/conversations'
+          return
+        }
+        if (!response.ok) return
+
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html')
+        const wasNearBottom = this.isNearBottom()
+        for (const node of doc.querySelectorAll('.chat__messages [data-message-id]')) {
+          const id = Number(node.dataset.messageId)
+          const current = this.findBubble(id)
+          const element = document.importNode(node, true)
+          if (!current) this.insertBubble(id, element)
+          else if (node.querySelector('.bubble--deleted') && !current.querySelector('.bubble--deleted'))
+            current.replaceWith(element)
+        }
+        if (wasNearBottom) this.scrollToBottom()
+      } catch (e) {
+        // un rechargement manuel reste possible
       }
     },
 
@@ -249,14 +283,19 @@ export function registerChat(Alpine) {
         const response = await fetch(form.action, {
           method: 'POST',
           body: new FormData(form),
-          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          headers: JSON_HEADERS,
           credentials: 'same-origin',
         })
         if (!response.ok) throw new Error('send')
+        const { id } = await response.json()
+
         input.value = ''
         input.focus()
         this.sent = true // petite coche de confirmation
         setTimeout(() => (this.sent = false), 1400)
+
+        // on n'attend pas l'écho du canal : le message s'affiche tout de suite
+        this.addMessage(id).catch(() => {})
       } catch (e) {
         this.error = "Le message n'a pas pu être envoyé. Réessayez."
       } finally {
@@ -273,12 +312,15 @@ export function registerChat(Alpine) {
         const response = await fetch(form.action, {
           method: 'POST',
           body: new FormData(form),
-          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          headers: JSON_HEADERS,
           credentials: 'same-origin',
         })
         if (!response.ok) throw new Error('delete')
+        // même logique que pour l'envoi : pas besoin d'attendre le canal
+        const id = Number(form.closest('[data-message-id]')?.dataset.messageId)
+        if (id) this.refreshMessage(id).catch(() => {})
       } catch (e) {
-        this.error = "La suppression a échoué. Réessayez."
+        this.error = 'La suppression a échoué. Réessayez.'
       }
     },
   }))
