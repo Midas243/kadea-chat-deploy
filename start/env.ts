@@ -20,7 +20,7 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // App
   APP_KEY: Env.schema.secret(),
-  APP_URL: Env.schema.string({ format: 'url' }),
+  APP_URL: Env.schema.string(),
 
   // Database
   DB_HOST: Env.schema.string({ format: 'host', tld: false }),
