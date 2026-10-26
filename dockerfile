@@ -79,4 +79,4 @@ COPY --from=build /app/build ./
 RUN npm ci --omit=dev
 
 EXPOSE 3333
-CMD ["node", "bin/server.js"]
+CMD ["sh", "-c", "node ace migration:run --force && node bin/server.js"]
