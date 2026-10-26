@@ -15,12 +15,12 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Node
   NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
   PORT: Env.schema.number(),
-  HOST: Env.schema.string({ format: 'host' }),
+  HOST: Env.schema.string({ format: 'host'}),
   LOG_LEVEL: Env.schema.string(),
 
   // App
   APP_KEY: Env.schema.secret(),
-  APP_URL: Env.schema.string({ format: 'url', tld: false }),
+  APP_URL: Env.schema.string({ format: 'url' }),
 
   // Database
   DB_HOST: Env.schema.string({ format: 'host', tld: false }),
