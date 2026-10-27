@@ -1,11 +1,10 @@
 import { BaseCommand, args } from '@adonisjs/core/ace'
 import type { CommandOptions } from '@adonisjs/core/types/ace'
-import mail from '@adonisjs/mail/services/main'
 import env from '#start/env'
 
 /**
- * Envoie un e-mail de test pour vérifier la configuration Brevo
- * (clé API, expéditeur validé) sans passer par l'inscription.
+ * Envoie un e-mail de test directement via l'API Brevo
+ * et affiche la réponse exacte en cas d'erreur.
  *
  *   node ace mail:test vous@exemple.com
  */
@@ -18,20 +17,38 @@ export default class MailTest extends BaseCommand {
   declare to: string
 
   async run() {
+    const key = env.get('BREVO_API_KEY')
     this.logger.info(`Expéditeur : ${env.get('MAIL_FROM_ADDRESS')}`)
     this.logger.info(`Destinataire : ${this.to}`)
+    this.logger.info(`Clé API : ${key.slice(0, 8)}… (${key.length} caractères)`)
 
     try {
-      await mail.send((message) => {
-        message
-          .to(this.to)
-          .subject('Test d’envoi – Kadea Chat')
-          .html('<p>Si vous lisez ce message, l’envoi d’e-mails fonctionne.</p>')
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': key,
+          'content-type': 'application/json',
+          'accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: env.get('MAIL_FROM_NAME'), email: env.get('MAIL_FROM_ADDRESS') },
+          to: [{ email: this.to }],
+          subject: 'Test d’envoi – Kadea Chat',
+          htmlContent: '<p>Si vous lisez ce message, l’envoi d’e-mails fonctionne.</p>',
+        }),
       })
-      this.logger.success('E-mail accepté par Brevo. Vérifiez la boîte de réception et les spams.')
+      const body = await res.text()
+
+      if (res.ok) {
+        this.logger.success(`Accepté par Brevo (${res.status}). Vérifiez la boîte et les spams.`)
+      } else {
+        this.logger.error(`Brevo a répondu ${res.status} :`)
+        this.logger.error(body)
+        this.exitCode = 1
+      }
     } catch (error) {
-      this.logger.error('Échec de l’envoi :')
-      this.logger.error(String(error?.message ?? error))
+      this.logger.error('Impossible de joindre Brevo (réseau, pare-feu, antivirus ?) :')
+      this.logger.error(String(error?.cause?.message ?? error?.message ?? error))
       this.exitCode = 1
     }
   }
