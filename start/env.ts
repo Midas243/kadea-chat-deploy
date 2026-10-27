@@ -41,7 +41,4 @@ export default await Env.create(new URL('../', import.meta.url), {
   MAIL_FROM_NAME: Env.schema.string(),
   MAIL_FROM_ADDRESS: Env.schema.string(),
   BREVO_API_KEY: Env.schema.string(),
-
-    // Confirmation d'e-mail à l'inscription (true par défaut, mettre false en local)
-  REQUIRE_EMAIL_VERIFICATION: Env.schema.boolean.optional(),
 })

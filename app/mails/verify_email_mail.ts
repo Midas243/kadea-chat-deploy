@@ -13,8 +13,10 @@ export default class VerifyEmailMail extends BaseMail {
   }
 
   prepare() {
-    this.message
-      .to(this.user.email)
-      .htmlView('emails/verify_email', { name: this.user.fullName, url: this.url })
+    // La vue est dans resources/views/mails/ (et non « emails/ »)
+    this.message.to(this.user.email).htmlView('mails/verify_email', {
+      name: this.user.fullName ?? this.user.email,
+      url: this.url,
+    })
   }
 }
