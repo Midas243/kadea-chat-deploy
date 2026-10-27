@@ -1,0 +1,68 @@
+# 💬 Kadea Chat Application
+
+Application web de messagerie et de gestion d'utilisateurs en temps réel développée avec **AdonisJS v7**, **TypeScript** et **PostgreSQL**.
+
+---
+
+## 📌 Présentation du Projet
+
+Ce projet a été conçu dans le cadre de la formation au sein de la **Kadea Academy**. Il propose une architecture backend moderne, robuste et sécurisée avec un système complet d'authentification, de gestion de profil, de conversations (privées et de groupe) et de messages.
+
+---
+
+## 🛠️ Stack Technique
+
+- **Framework Backend :** [AdonisJS v7](https://adonisjs.com/) (Node.js & TypeScript)
+- **Base de données :** PostgreSQL
+- **ORM :** Lucid ORM
+- **Authentification & Autorisations :** `@adonisjs/auth` (Guards/Tokens/Session) & `@adonisjs/bouncer` (Policies)
+- **Validation des données :** VineJS (`@adonisjs/vine`)
+- **WebSockets / Temps réel :** `@adonisjs/transmit`
+- **Moteur de modèles :** Edge (`@adonisjs/edge`) / Vite
+
+---
+
+## 🚀 Fonctionnalités Principales
+
+- 🔐 **Authentification & Sécurité :**
+  - Inscription, connexion, déconnexion.
+  - Vérification d'adresse e-mail.
+  - Réinitialisation de mot de passe par e-mail.
+  - Limitation du taux de requêtes (*Rate Limiting* / *Throttling*).
+
+- 👤 **Gestion du Profil :**
+  - Mise à jour des informations personnelles et d'avatar.
+  - Recherche d'utilisateurs.
+
+- 💬 **Messagerie & Conversations :**
+  - Conversations individuelles et conversations de groupe.
+  - Envoi, réception et statut des messages (lus, distribués).
+  - Pièces jointes (fichiers/images).
+  - Blocage et déblocage d'utilisateurs.
+
+---
+
+## 📂 Architecture du Projet
+
+```text
+Kadea/
+├── app/
+│   ├── abilities/        # Règles d'habilitation globale
+│   ├── controllers/      # Contrôleurs HTTP (Auth, Messages, Conversations, etc.)
+│   ├── exceptions/       # Gestionnaire centralisé des exceptions
+│   ├── mails/            # Templates d'e-mails (Vérification, Réinitialisation)
+│   ├── middleware/       # Middlewares (Auth, Guest, Bouncer, Throttling)
+│   ├── models/           # Modèles Lucid (User, Message, Conversation, Member, etc.)
+│   ├── policies/         # Politiques d'accès Bouncer (ex: ConversationPolicy)
+│   ├── services/         # Logique métier et services (ConversationService, TokenService, etc.)
+│   └── validators/       # Schemas de validation VineJS
+├── bin/                  # Scripts d'exécution (Server, Console, Test)
+├── config/               # Fichiers de configuration (App, Auth, Database, Mail, etc.)
+├── database/
+│   └── migrations/       # Migrations SQL de la base de données
+├── .env.example          # Fichier de variables d'environnement exemple
+├── adonisrc.ts           # Configuration du framework AdonisJS
+└── package.json          # Dépendances du projet
+
+
+par Midas243(TEPA TOKO GEORGES)
